@@ -1,7 +1,7 @@
 Elearning
 =========
 
-Elearning
+Elearning can automatically produce Questions via paper 
 
 stanford NLP library links = http://nlp.stanford.edu/software/stanford-corenlp-full-2014-10-31.zip
 
