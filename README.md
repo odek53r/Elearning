@@ -13,5 +13,6 @@ stanford-corenlp-3.5.0.jar,stanford-corenlp-3.5.0-javadoc.jar,stanford-corenlp-3
 
 * 文本裡的每個句子，務必確保都有以空白隔開，否則有可能不會產生問句
 * java版本使用java 8以上
+* lib、resource資料夾勿任意改名或更動
 
 
