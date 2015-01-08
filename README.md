@@ -7,7 +7,7 @@ stanford-corenlp-3.5.0.jar,stanford-corenlp-3.5.0-javadoc.jar,stanford-corenlp-3
 
 在stanford NLP library links下載完後，將上面4個.jar檔放入lib資料夾裡
 
-將files.txt打開，依照裡面格式將所有文本資料路徑以","隔開寫入
+將files.txt打開，依照裡面格式將所有文本資料路徑以","隔開寫入，不保留空白
 
 在command line裡打上 java -jar NLP.jar ./files.txt，所有文本會自動產生問句，各別文本所產生的問句會以.txt檔存在相同路徑裡
 
