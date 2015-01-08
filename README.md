@@ -12,5 +12,6 @@ stanford-corenlp-3.5.0.jar,stanford-corenlp-3.5.0-javadoc.jar,stanford-corenlp-3
 在command line裡打上 java -jar NLP.jar ./files.txt，所有文本會自動產生問句，各別文本所產生的問句會以.txt檔存在相同路徑裡
 
 * 文本裡的每個句子，務必確保都有以空白隔開，否則有可能不會產生問句
+* java版本使用java 8以上
 
 
