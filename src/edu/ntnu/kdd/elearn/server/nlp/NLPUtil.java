@@ -1,13 +1,12 @@
 package edu.ntnu.kdd.elearn.server.nlp;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 import edu.ntnu.kdd.elearn.shared.model.Article;
-import edu.ntnu.kdd.elearn.shared.model.Query;
 import edu.ntnu.kdd.elearn.shared.model.Question;
 import edu.ntnu.kdd.elearn.shared.model.Sentence;
 import edu.ntnu.kdd.elearn.shared.model.Word;
@@ -17,11 +16,16 @@ import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
 import edu.stanford.nlp.ling.CoreAnnotations.TextAnnotation;
 import edu.stanford.nlp.ling.CoreAnnotations.TokensAnnotation;
 import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.ling.IndexedWord;
 import edu.stanford.nlp.pipeline.Annotation;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
+import edu.stanford.nlp.semgraph.SemanticGraph;
+import edu.stanford.nlp.semgraph.SemanticGraphCoreAnnotations;
+import edu.stanford.nlp.semgraph.SemanticGraphEdge;
+import edu.stanford.nlp.trees.GrammaticalRelation;
 import edu.stanford.nlp.util.CoreMap;
 
-public class NLPUtil {
+public class NLPUtil implements Serializable{
 	private static NLPUtil instance = new NLPUtil();// singleton pattern
 
 	private List<Word> wordList = new ArrayList<Word>();
@@ -64,19 +68,27 @@ public class NLPUtil {
 		for (CoreMap sentence : sentences) {
 			Sentence s = new Sentence(); //瘥�銝�銵停摰����甈�
 			stringBuilder.setLength(0);
-
+			
 			int length = 0;
 			// post.tagLabel(coreLabelList);
 			for (int i = 0; i < sentence.get(TokensAnnotation.class).size(); i++) {
 				// this is the text of the token
 				CoreLabel token = sentence.get(TokensAnnotation.class).get(i);
-
+				
 				String original = token.get(TextAnnotation.class);
 				// this is the POS tag of the token 摮ord of sentence
 				String pos = token.get(PartOfSpeechAnnotation.class);
 				// this is the speech annotation 摮��閰�扯酉���
 				String ner = token.get(NamedEntityTagAnnotation.class);
 				// this is the NER label of the token撠������(�鈭粹������隞�)
+				int beginPosition = token.beginPosition();
+				
+				int endPosition = token.endPosition();
+				
+				SemanticGraph graph = sentence.get(SemanticGraphCoreAnnotations.BasicDependenciesAnnotation.class);
+				
+		        List<SemanticGraphEdge> edgeList = graph.edgeListSorted();
+		        
 				if (i == 0) {
 					s.setStart(token.beginPosition()); 
 				}
@@ -84,6 +96,21 @@ public class NLPUtil {
 				Word w = new Word(); //摨���ava�隞嗉������
 				w.setOriginal(original);
 				w.setPos(pos);
+				w.setBeginPosition(beginPosition);
+				w.setEndPosition(endPosition);
+				
+				for (int j = 0 ; j < edgeList.size() ; j++ ) 
+		        {
+		        	SemanticGraphEdge edge = edgeList.get(j);
+			        IndexedWord iw1 = edge.getGovernor();
+			        IndexedWord iw2 = edge.getDependent();
+			        GrammaticalRelation  relation = edge.getRelation();
+			        if(iw2.beginPosition() == w.getBeginPosition())
+			        {
+			        	w.addReln(relation);
+			        	w.addReWd(iw1);
+			        }
+				}
 				if (!ner.equals("O")) { //隞�銵典��撠���停set嚗���et
 					w.setNer(ner);
 				}
@@ -231,13 +258,13 @@ public class NLPUtil {
 		changeProcessing(article, temp, sentenceRelation);
 		for (Sentence sentence : article.getSentenceList()) {
 			List<QuestionGeneratorInterface> qgList = QGBuilder.listQG(this);
-
 			for (QuestionGeneratorInterface qg : qgList) {
 				if (qg.isAcceptable(sentence, article)) {
 					for (Question question : qg.getQuestion(sentence, article)) {
 						if (question != null) {
-							question.setContent(changeTheWriter(question.getContent()));	
-							question.set_sinorpul(thewriter_sinpul(question.getContent())); //��the writer���銴
+							String q = changeWriter(sentence.getContent(), question.getContent());
+							question.setContent(changeTheWriter(q));	
+							question.set_sinorpul(thewriter_sinpul(q)); //��the writer���銴
 							sentence.addQuestion(question);
 						}
 					}
@@ -545,12 +572,23 @@ public class NLPUtil {
 				boolean canAdd = false;
 				boolean isPRPs = false;
 				boolean isPRP = false ;
+				boolean isPoss = false;
 				Word changed =null;
 				for (int i = wordStart; i <= wordEnd; i++) {
 					if (changeString == null) {
 						changeString = "";
 					}
 					changed = source.getWordList().get(i);
+					
+					if(changed.getReln()!=null)//檢查是否為所有格
+					{
+						for(GrammaticalRelation relation : changed.getReln())
+						{
+							if(relation.getShortName().equals("poss"))
+								isPoss = true;
+						}
+					}
+					
 					changeString = changeString
 							+ changed.getOriginal() + " ";
 					if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$")){
@@ -570,58 +608,159 @@ public class NLPUtil {
 				if(canAdd){							
 					int counter=0;
 					
-					for (int i = targetWordStart; i <= targetWordEnd; i++) {
+					for (int i = targetWordStart; i <= targetWordEnd; i++){
+						changed = target.getWordList().get(i);	
 						if (changeString == null) {
 							changeString = "";
 						}
-						if (counter>3) { //憭扳3�����誨
-							canAdd=false;
-						}
-						if (sentenceIndex==targetSentence) { //�������銝�誨
-							canAdd=false;
-						}
-						changed = target.getWordList().get(i);	
 						
-						if(changed.getPos().equals("POS")){//���RP => 's�隤�
+						boolean isRecWordFound = false;
+						if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$")){//代換後如果還是PRP or PRP$則繼續代換，只遞迴一次
+							int curWordStart = i;
+							int curWordEnd = i+1;
+							
+							for(String perChange2 : result)
+							{
+								String[] temp2 = perChange2.split(",");
+								int sourceRecSentence = Integer.parseInt(temp2[0]);
+								int sourceRecWordStart = Integer.parseInt(temp2[1]);
+								int sourceRecWordEnd = Integer.parseInt(temp2[2]);
+								if(targetSentence == sourceRecSentence && curWordStart == sourceRecWordStart && sourceRecWordEnd <= curWordEnd)
+								{
+									int targetRecSentence = Integer.parseInt(temp2[3]);
+									int targetRecWordStart = Integer.parseInt(temp2[4]);
+									int targetRecWordEnd = Integer.parseInt(temp2[5]);
+									for(int j = targetRecWordStart ; j <= targetRecWordEnd ; j++)
+									{
+										Word targetRecWord = article.getSentenceList().get(targetRecSentence).getWordList().get(j);
+										Word targetRecNxtWord = article.getSentenceList().get(targetRecSentence).getWordList().get(j+1);
+										String targetWord = targetRecWord.getOriginal();
+										
+										if(changed.getPos().equals("PRP$")&&targetRecWord.getNer()!=null && targetRecWord.getNer().equals("PERSON") && targetRecNxtWord != null &&//避免專有名詞已經有加's,而再加一次
+												!targetRecNxtWord.getOriginal().contains("'s") && !targetRecNxtWord.getOriginal().contains("’s"))
+										{
+											targetWord += "'s";
+										}
+										
+										if(changed.getPos().equals("PRP$"))
+										{
+											if(targetWord.toLowerCase().equals("i"))
+												changeString = changeString+"my"+ " ";
+											else if(targetWord.toLowerCase().equals("you"))
+												changeString = changeString+"your"+ " ";
+											else if(targetWord.toLowerCase().equals("she"))
+												changeString = changeString+"her"+ " ";
+											else if(targetWord.toLowerCase().equals("he"))//避免his代換成he
+												changeString = changeString+"his"+ " ";
+											else if(targetWord.toLowerCase().equals("we"))
+												changeString = changeString+"our"+ " ";
+											else if(targetWord.toLowerCase().equals("they"))
+												changeString = changeString+"their"+ " ";
+											else if(targetWord.toLowerCase().equals("it"))
+												changeString = changeString+"its"+ " ";
+											else
+												changeString = changeString
+														+ targetWord + " ";
+										}
+										else
+											changeString = changeString
+													+ targetWord + " ";
+										
+										
+										
+										counter++;//代換字變長
+									}
+									counter--;//扣掉原始字重複加
+									isRecWordFound = true;
+									
+									break;
+								}
+							}
+							canAdd = true;
+						} 
+						if (counter>3) { //大於3個字則不取代
+							canAdd=false;
+						}
+						if (sentenceIndex==targetSentence) { //產生規則的那句不取代
+							canAdd=false;
+						}
+						
+						
+						if(changed.getPos().equals("POS")){//避免PRP => 's錯誤
 							if(isPRP && (!isPRPs)){
-														
+								
 							}
 							else{
 								changeString = changeString
 										+ changed.getOriginal() + " ";
 							}
 						}
+						else if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$"))
+						{
+							if(isRecWordFound == false)
+							{
+								if(isPoss)
+								{
+									if(changed.getOriginal().toLowerCase().equals("i"))
+										changeString = changeString+"my"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("you"))
+										changeString = changeString+"your"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("she"))
+										changeString = changeString+"her"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("he"))
+										changeString = changeString+"his"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("we"))
+										changeString = changeString+"our"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("they"))
+										changeString = changeString+"their"+ " ";
+									else if(changed.getOriginal().toLowerCase().equals("it"))
+										changeString = changeString+"its"+ " ";
+									else
+										changeString = changeString
+											+ changed.getOriginal() + " ";
+								}else
+								{
+									changeString = changeString
+											+ changed.getOriginal() + " ";
+								}
+							}
+						}
 						else{
-							changeString = changeString
-									+ changed.getOriginal() + " ";
+							if(changed.getNer()!=null && changed.getNer().equals("PERSON"))//避免[She => A new student],Is A new student tall and pretty
+							{
+								changeString = changeString
+										+ changed.getOriginal() + " ";
+							}
+							else
+							{
+								changeString = changeString
+										+ changed.getOriginal().toLowerCase() + " ";
+							}
 						}
 						
 						counter++;
-
-						if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$")){
-							canAdd = false;
-						} 
-				
-						
 						
 					}
 				}
 													
 				if(canAdd){
-						if(isPRPs){// ���RPs => non-PRPs
+						if(isPoss){// 避免PRPs => non-PRPs
 							String revers = "";
+							String temp1[] = changeString.split("=>");
 							for(int i = changeString.length()-1; i>=0; i--)
 							{
 								revers = revers + changeString.charAt(i);
 							}							
 							revers = revers.substring(1,3);
-
-							if(!((revers.equals("s'")||revers.equals("s��")))){
+							//除了person's和PRP$之外的名詞所有格如果沒加's，在這邊加
+							if(!((revers.equals("s'")||revers.equals("s’"))) && !temp1[0].contains("our") && !temp1[0].contains("your") && !temp1[0].contains("their")
+									&& !temp1[0].contains("Our") && !temp1[0].contains("Your") && !temp1[0].contains("Their")&& !temp1[0].contains("my") && !temp1[0].contains("My")
+									&& !temp1[0].contains("Her") && !temp1[0].contains("her")&&!temp1[0].contains("His") && !temp1[0].contains("his")
+									&& !temp1[0].contains("My") && !temp1[0].contains("my")&& !temp1[0].contains("Its") && !temp1[0].contains("its")){
 								changeString = changeString + "'s";
 							}
-
-
 						}					
+					System.err.println(changeString);
 					source.addChange(changeString);
 				}
 				
@@ -638,7 +777,34 @@ public class NLPUtil {
 		}
 		*/
 	}
-	
+//	private boolean RecChange(Article article,String []result,String changeString,int curWordStart,int curWordEnd,int targetSentence)
+//	{
+////		int curWordStart = i;
+////		int curWordEnd = i+1;
+//		boolean isRecWordFound = false;
+//		for(String perChange2 : result)
+//		{
+//			String[] temp2 = perChange2.split(",");
+//			int sourceRecSentence = Integer.parseInt(temp2[0]);
+//			int sourceRecWordStart = Integer.parseInt(temp2[1]);
+//			int sourceRecWordEnd = Integer.parseInt(temp2[2]);
+//			if(targetSentence == sourceRecSentence && curWordStart == sourceRecWordStart && sourceRecWordEnd <= curWordEnd)
+//			{
+//				int targetRecSentence = Integer.parseInt(temp2[3]);
+//				int targetRecWordStart = Integer.parseInt(temp2[4]);
+//				int targetRecWordEnd = Integer.parseInt(temp2[5]);
+//				for(int j = targetRecWordStart ; j <= targetRecWordEnd ; j++)
+//				{
+//					String targetWord = article.getSentenceList().get(targetRecSentence).getWordList().get(j).getOriginal();
+//					changeString = changeString
+//							+ targetWord + " ";
+//				}
+//				
+//				isRecWordFound = true;
+//			}
+//		}
+//		return isRecWordFound;
+//	}
 	private String[] newReplaceRules(String[] result){
 		ArrayList<String> back = new ArrayList<String>();
 		for(int i=0;i<result.length;i++){
@@ -666,14 +832,26 @@ public class NLPUtil {
 		} else {
 			article.setFirstPerson(false);
 		}
-		
 		return result;
 	}
-
+	public String changeWriter(String origin,String sentence)
+	{
+		String result = new String(sentence);
+		if(origin.matches(".*(\\s?(I|i)\\s(\\s|\\w)+)\\smyself\\s.*"))//I....myself -> I....himself
+		{
+			result = result.replaceAll("myself","himself");
+		}
+		if(origin.matches(".*(\\s?(I|i)\\s(\\s|\\w)+)\\smy\\s.*"))//I....myself -> I....himself
+		{
+			result = result.replaceAll("my","his");
+		}
+		return result;
+	}
 	public String changeTheWriter(String sentence) {
 		String result = new String(sentence);
 		result = result.replaceAll("Now ","");
 		System.out.println("test-------------"+result);
+		
 		if (result.matches(".*(\\W+(I|we|I'm|My|our|my|Our|We|Us|us|i)+\\W+)+.*")) {// include
 			System.out.println("I am");
 			// I,we,My...etc
@@ -682,7 +860,7 @@ public class NLPUtil {
 			result = result.replaceAll("(\\s?(am|Am)\\s(i|I)\\s)|\\s?(I�)\\s",
 					" is the writer ");
 			result = result.replaceAll(
-					"(\\s(I|we|us|i)(\\W)\\s)|(\\s(I|we|us|i)\\W)|((I|We|Us)\\s)",
+					"(\\s(I|we|us|i|me)(\\W)\\s)|(\\s(I|we|us|i|me)\\W)|((I|We|Us)\\s)",
 					" the writer ");
 			result = result.replaceAll(
 					"(\\s(my|our)\\s)|(\\s(my|our)\\W)|((My|Our)\\s)",
@@ -705,4 +883,5 @@ public class NLPUtil {
 		}
 		return flag ;
 	}
+	
 }

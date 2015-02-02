@@ -14,13 +14,14 @@ public class WhereQG extends ConnectiveQG {
 	
 	public WhereQG(NLPUtil nlpUtil) {
 		super(nlpUtil);
-		this.connective = "where"; //原來是when改作where
+		this.connective = "where"; //���when�雿here
 		this.type = Type.WHERE;
 		this.prefix = "Where";
 	}
 
 	@Override
 	public boolean isAcceptable(Sentence sentence, Article article) {
+		
 		boolean filter = sentence.getFilter();
 		if(filter){
 			return false;
@@ -52,6 +53,7 @@ public class WhereQG extends ConnectiveQG {
 					&& wordList.get(i).getNer()!=null
 					&& wordList.get(i).getNer().equals("LOCATION")) {
 				connective = wordList.get(i - 1).getOriginal();
+				
 			}
 		}
 

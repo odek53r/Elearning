@@ -61,7 +61,7 @@ public class StandQuestions {
 	    ArrayList<Word> temp = sentence.getWordList(); //get each word in the sentence
 	    boolean isIamPerson =false;
 	    String sent = sentence.getContent();
-	    if(sent.startsWith("I am")){ //看句子是不是以I am 開頭
+	    if(sent.startsWith("I am")||sent.startsWith("I'm")||sent.startsWith("I’m")){ //看句子是不是以I am 開頭
 	    	String Ner = temp.get(2).getNer() ; //得到名字(人名專有名詞)
 	    	if(Ner!=null){
 	    		if(Ner.equals("PERSON")){
@@ -80,6 +80,7 @@ public class StandQuestions {
 	    //process 
 	    boolean use_v = false ;
 	    String NPos =null;
+	    String RBPos_end = null;
 	    for(int i = 0;i< temp.size();i++)
 	    {
 	    	String OriWord = temp.get(i).getOriginal();  //original word
@@ -88,56 +89,77 @@ public class StandQuestions {
 	    	String OriNxtWord = null;
 	    	String NxtPos = null;
 	    	
-	    	if(WordPos.equals("NN")||WordPos.equals("NNS")||WordPos.equals("NNP")||WordPos.equals("NNPS"))
+	    	if(WordPos.equals("NN")||WordPos.equals("NNS")||WordPos.equals("NNP")||WordPos.equals("NNPS"))//判斷temp[i]的word是否為名詞(單複數)，從code tag1移到這  2015/01/21
 	    	{
 	    		NPos=WordPos;
 	    	}
-	    	if(i==0 && OriWord.equals(",")){
-	    		i++ ;
+	    	if(i==0 && OriWord.equals(",")){//檢查sentence的第一個word是否為","，如果為","，則跳過逗點 2015/01/21
+	    		continue;
+	    		/*i++ ;
 	    		OriWord = temp.get(i).getOriginal();  //original word
 	 	        WordPos =  temp.get(i).getPos();   //result of POS tagging 
 	 	    	WordNer =  temp.get(i).getNer();  //result of NER
+	 	    	*/
+	    		//2015/01/21 註解掉
 	    	}
-	    	if(i==0 && OriWord.equals("But")){
-	    		i++ ;
+	    	if(i==0 && OriWord.equals("But")){//檢查sentence的第一個word是否為"But"，如果為"But"，則跳過But 2015/01/21
+	    		continue;
+	    		/*i++ ;
 	    		OriWord = temp.get(i).getOriginal();  //original word
 	 	        WordPos =  temp.get(i).getPos();   //result of POS tagging 
 	 	    	WordNer =  temp.get(i).getNer();  //result of NER
+	 	    	*/
+	    		//2015/01/21 註解掉
 	    	}
+	    	
 	    	if(i+1<temp.size()){ //得到下一個word的詞性跟word
 	    		OriNxtWord = temp.get(i+1).getOriginal();
 	    		NxtPos = temp.get(i+1).getPos();
 	    	}
 	    	String PreWord = "";
 	    	String PrePos = "";
-	    	if(i>1){ //得到前一個字的內容跟詞性
+	    	if(i>1){ //得到前一個字的內容跟詞性 //if(i>0)才對? 2015/01/21
 	    		PreWord =  temp.get(i-1).getOriginal(); //original front word
 	    		PrePos = temp.get(i-1).getPos();
 	    	}
 	    	
-	    	//VBZ:is,has   VBP:are,have   VBD:was,were,had
+	    	//VBZ:is,am,has   VBP:are,have   VBD:was,were,had
 	    	//問當前i的字是否為be動詞(單複數，過去)，動詞
 	    	
-	    	if(WordPos.equals("VBZ")||WordPos.equals("VBP")||WordPos.equals("VBD")||WordPos.equals("VB"))
+	    	if(WordPos.equals("VBZ")||WordPos.equals("VBP")||WordPos.equals("VBD")||WordPos.equals("VB")||WordPos.equals("VBG"))//新增WordPos.equals("VBG") 2015/01/21
 	    	{
-	    		if(NPos!=null && (NPos.equals("NNS")||NPos.equals("NNPS")))
+	    		if(NPos!=null && (NPos.equals("NNS")||NPos.equals("NNPS")))//判斷是否單數
 	    		{
 	    			setFirstPerson(false);
 	    		}
-	    		//is,are
+	    		//is,are 判斷動詞為哪一種動詞
 	    		if(OriWord.equals("is")||OriWord.equals("are")||OriWord.equals("am")||OriWord.equals("was")||
 	    				OriWord.equals("were")||OriWord.equals("'m")||OriWord.equals("’m"))
 	    		{
 	    			
 	    			if(OriNxtWord!=null&&(OriNxtWord.equals("n’t")||OriNxtWord.equals("n't"))){
 	    				if(!use_v){ //判斷問句是否已經有動詞 防止dododoes雙動詞問題
-	    					question = OriWord + OriNxtWord + question;
+	    					if(OriWord.equals("'m")||OriWord.equals("’m"))
+	    					{
+	    						question = OriWord + OriNxtWord + question;
+	    					}else
+	    					{
+	    						question = OriWord + OriNxtWord + question;
+	    					}
+	    					
 	    					use_v = true ;
 	    				}
 	    			}
 	    			else{
 	    				if(!use_v){
-	    					question = OriWord + question;
+	    					if(OriWord.equals("'m")||OriWord.equals("’m"))
+	    					{
+	    						question = "is" + question;
+	    					}else
+	    					{
+	    						question = OriWord + question;
+	    					}
+	    					
 	    				}
 	    			}		
 		    			
@@ -150,8 +172,12 @@ public class StandQuestions {
 	    				use_v = true ;
 	    			}
 	    		}
-	    		else if((OriWord.equals("have")||OriWord.equals("has")||OriWord.equals("had")))
+	    		else if((OriWord.equals("have")||OriWord.equals("has")||OriWord.equals("had")||OriWord.equals("'ve")))
 	    		{
+	    			if(OriWord.equals("'ve") && isFirstPerson != true)//have、has單複數校正
+	    				OriWord = "have";
+	    			if(OriWord.equals("'ve") && isFirstPerson != false)
+	    				OriWord = "has";
 	    			//have�
 	    			//VBN:���
 	    			if(NxtPos.contains("VBN")){ //have.has,had + p.p
@@ -208,7 +234,15 @@ public class StandQuestions {
 	    		//V+ing
 	    		else if(WordPos.equals("VBG")) //動名詞
 	    		{
-	    			question = question + " " + OriWord;
+	    			if(temp.get(i).getNer()!=null && temp.get(i).getNer().equals("PERSON"))
+					{
+						question = question + " " + OriWord;
+					}
+					else
+					{
+						question = question + " " + OriWord.toLowerCase();
+					}
+	    			
 	    		}
 	    		else if(PrePos.equals("MD")){ //感官動詞 looks , sound , feel
 	    			question = question + " " + OriWord; 
@@ -252,6 +286,8 @@ public class StandQuestions {
 	    	}
 	    	//MD:can,could,may,would,shall,should,will
 	    	else if(WordPos.equals("MD")){
+	    		if(OriWord.equals("'d"))//縮寫校正
+	    			OriWord = "could";
 	    		if(!use_v){
 	    			question = OriWord + question; 	 
 	    			use_v = true ;
@@ -260,11 +296,19 @@ public class StandQuestions {
 	    	
 	    	else if(i == temp.size()-1) //到最後一個字了
 	    	{
+	    		
 	    		if(OriWord.matches("(\\w+\\W)+")){ //判斷是不是英文字
+	    			
 	    			question = question +" " + toQuestionMark(OriWord); 
 	    		}
 	    		else{ //如果不是代表end + "?"
-	    			question = question +  " ?";
+	    			question = question +  "?";
+	    		}
+	    		if(RBPos_end != null)
+	    		{
+    				
+	    			StringBuilder str = new StringBuilder(question);
+	    			question = str.replace(str.length()-1, str.length()," "+RBPos_end+"?").toString();
 	    		}
 	    		
 	    	}
@@ -279,20 +323,45 @@ public class StandQuestions {
 	    	else
 	    	{	
 	    		//change the first word of the original sentence into lowercase  
-	    		if(i==0){ 
+	    		if(i==0)
+	    		{ 
 	    			
 	    			if(WordNer==null)//not NNP,location,organization
 	    			{
-	    				question = question + " " + OriWord.toLowerCase();	    				
+	    				if(WordPos.equals("RB")&&(OriWord.equals("Now")||OriWord.equals("Today")||OriWord.equals("now")||OriWord.equals("today"))||
+	    						OriWord.equals("Recently")||OriWord.equals("recently")||OriWord.equals("Soon")||OriWord.equals("soon")||
+	    						OriWord.equals("Yesterday")||OriWord.equals("yesterday")||OriWord.equals("Already")||OriWord.equals("already")||
+	    						OriWord.equals("Yet")||OriWord.equals("yet")||OriWord.equals("Finally")||OriWord.equals("finally"))//句首時間副詞暫存
+	    				{
+	    					RBPos_end = OriWord.toLowerCase();
+	    					if(OriNxtWord.equals(","))//避免","出現在人名或代名詞前 ,ex: When did , Andy come back finally
+	    					{
+	    						i=i+1;
+	    					}
+	    				}
+	    				else 
+	    				{
+	    						question = question + " " + OriWord.toLowerCase();
+	    				}
+	    			 				
 	    			}
 	    			else{//NNP,location,organization
 		    			question = question + " " + OriWord;
+		    		
 	    			}
 	    		}
 	    		else{ //其他字都加在後面
 	    			if(!OriWord.equals("n’t")|| !OriWord.equals("n't"))
 	    			{
-	    				question = question + " " + OriWord;	
+	    				if(temp.get(i).getNer()!=null && temp.get(i).getNer().equals("PERSON"))
+    					{
+    						question = question + " " + OriWord;
+    					}
+    					else
+    					{
+    						question = question + " " + OriWord.toLowerCase();
+    					}
+
 	    			}
 	    			    			
 	    		}
@@ -300,14 +369,15 @@ public class StandQuestions {
 	    	 }
 
 	     }
+	    System.out.println("primal standQuestion:"+question);
 	    //process end
 	    question = toUpperCase(question); //首字的第一個字變大寫
 	    if(isFirstPerson){ //看是不是第一人稱的文章
 	    	question = toChangeBeginning(question); //如果開頭的問句是Am....,am  ,'m  ...
 	    }
-	   
-	    System.out.println("YES/NO original Q : "+question) ; //印出問句
-	    question = PRPreplacement(sentence,question);   //文法代換規則	    
+	    System.out.println("YES/NO original Q :"+question) ; //印出問句
+	    question = PRPreplacement(sentence,question);   //文法代換規則
+	    question.replaceAll("( {1,}\\?)$", "?");//避免問號前有空格
 	    }	   	    	    	   
 	}
 	
@@ -316,10 +386,17 @@ public class StandQuestions {
 		System.out.println("YES/NO :"+changelist);
 		for(String x : changelist){
 			String[] temp = x.split("=>");
-			//System.out.println("replacement :"+temp[0]+"--->"+temp[1]);
-			oldQ = oldQ.replace(addSpace(temp[0].toLowerCase()), addSpace(temp[1]));
+//			System.out.println("replacement :"+temp[0]+"--->"+temp[1]);
+			String replaceArg0 = addSpace(temp[0].toLowerCase());
+			String replaceArg1 = addSpace(temp[1]);
+			System.out.println("temp[0] addSpace:"+replaceArg0+", temp[1] addSpace:"+replaceArg1);
+			String temp1 = new String(oldQ);
+			oldQ = oldQ.replace(replaceArg0,replaceArg1);
+			if(temp1.equals(oldQ))
+				oldQ = oldQ.replace(replaceArg0.substring(0,replaceArg0.length()-1),replaceArg1);
+			if(temp1.equals(oldQ))
+				oldQ = oldQ.replace(replaceArg0.substring(1,replaceArg0.length()),replaceArg1);
 		}
-
 		System.out.println("Yes/No Q with PRP replacement : "+oldQ);
 		return oldQ;
 	}

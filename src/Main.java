@@ -1,6 +1,5 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -8,6 +7,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -16,6 +18,10 @@ import edu.ntnu.kdd.elearn.server.nlp.NLPUtil;
 import edu.ntnu.kdd.elearn.shared.model.Article;
 import edu.ntnu.kdd.elearn.shared.model.Question;
 import edu.ntnu.kdd.elearn.shared.model.Sentence;
+import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
+import edu.stanford.nlp.pipeline.Annotation;
+import edu.stanford.nlp.pipeline.StanfordCoreNLP;
+import edu.stanford.nlp.util.CoreMap;
 
 
 public class Main {
@@ -23,12 +29,14 @@ public class Main {
 
 	Gson gson ;
 	
+	
 	public Main(String[] filepaths) throws Exception{
 		
 		GsonBuilder builder = new GsonBuilder();
 		builder.disableHtmlEscaping();
 	    gson = builder.create();
 	    
+		
 	    for(int i = 0 ; i < filepaths.length ; i++){
 	    	
 			String content = readFile(filepaths[i]);
@@ -36,21 +44,25 @@ public class Main {
 				throw new Exception("no content");
 			
 			Article article = createArticle(content);	
-			Questions questions = nlpProcess(article);
+			Questions_with_sentence questions = nlpProcess(article);
 			
-			writeFile(gson.toJson(questions),filepaths[i]);
-			System.out.print(gson.toJson(questions));
+//			writeFile(gson.toJson(questions),filepaths[i]);
+//			System.out.print(gson.toJson(questions));
 	    }
+	    
+	
 	}
 	
 	
-	public Questions nlpProcess(Article article) throws IOException{
+	public Questions_with_sentence nlpProcess(Article article) throws IOException{
+	
 		NLPUtil nlpUtil = NLPUtil.getInstance();
+		
 		nlpUtil.processStandardArticle(article);
 		
 		ArrayList<Sentence> list = article.getSentenceList();
-		Questions questions = new Questions();
-		
+//		Questions questions = new Questions();
+		Questions_with_sentence questions = new Questions_with_sentence();
 		for(int i = 0 ; i < list.size() ; i++)
 		{
 			Sentence s = list.get(i);
@@ -58,7 +70,7 @@ public class Main {
 			for(Question q : s.getQuestionList())
 			{
 				System.out.println("Q:"+q.getContent());
-				questions.addQuestion(q.getContent());
+				questions.addQuestion(q.getContent(),s.getContent());
 			}
 		}
 		return questions;
@@ -111,14 +123,43 @@ public class Main {
 		}
 	}
 	
+	private class Questions_with_sentence{
+		ArrayList<Question> output = new ArrayList<Question>(); 
+		private class Question{
+			String sentence = "";
+			String question = "";
+		}
+		public void addQuestion(String q,String s){
+			Question question = new Question();
+			question.question = q;
+			question.sentence = s;
+			output.add(question);
+		}
+	}
 	public static void main(String[] args) throws Exception {
+			
+//			System.setErr(new PrintStream(new OutputStream(){
+//			@Override
+//			public void write(int arg0) throws IOException{}
+//			}));
+//			System.setOut(new PrintStream(new OutputStream() {
+//			
+//			@Override
+//			public void write(int arg0) throws IOException {
+//				// TODO Auto-generated method stub
+//				
+//			}
+//		}));
 			if(args == null)
 				throw new Exception("no argument");
 			String pathEntry = readFile(args[0]);
-			String []filepaths = pathEntry.split(",");
-			
+			String []filepaths = new String[]{"1-01.txt"};//pathEntry.split(",");
 			
 				new Main(filepaths);
-
+	
+	
+			
 	}
+	
+	
 }

@@ -116,13 +116,24 @@ public class whoQuestion {
 					}
 				}
 			}
+			if(wPos.equals("MD"))//避免NLP將 won't切成 wo n't造成錯誤，ex: Who really hopes Andy wo n't make Mom sad again
+			{
+				if(wQri.equals("Wo"))
+				{
+					wQri = "Will";
+				}
+				else if(wQri.equals("wo"))
+				{
+					wQri = "will";
+				}
+			}
 			output = output + " " + wQri;
 			
 		}
 		if (words.get(WordEnd + 1).getPos().equals("RB")) {
 			RB = true;
 		}
-		output = output + " ?";
+		output = output + "?";
 		System.out.println("WHO Q : " + output);
 		whoQ = output;
 
@@ -131,7 +142,7 @@ public class whoQuestion {
 		String tempword=endwordStr.getOriginal();
 		String secondword=" ";
 		boolean second=false;
-		for (String x : changed) {
+		for (String x : changed) {//要換的word和who所代表word有相同字則不換，ex:[She =>Ruby , her =>Ruby 's]
 			System.out.println(x);
 			String[] temp = x.split(" =>");
 			System.out.println("temp0: "+temp[0]+" temp1: "+temp[1]+" endword: "+tempword);
