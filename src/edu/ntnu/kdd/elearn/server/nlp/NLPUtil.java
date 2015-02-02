@@ -688,7 +688,8 @@ public class NLPUtil implements Serializable{
 						
 						if(changed.getPos().equals("POS")){//避免PRP => 's錯誤
 							if(isPRP && (!isPRPs)){
-								
+								changeString = changeString
+										+ changed.getOriginal() + " ";
 							}
 							else{
 								changeString = changeString
