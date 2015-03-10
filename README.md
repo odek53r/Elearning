@@ -1,9 +1,10 @@
 Elearning
 =========
+*** stanford NLP library已更新
 
-stanford NLP library links = http://nlp.stanford.edu/software/stanford-corenlp-full-2014-10-31.zip
+stanford NLP library links = http://nlp.stanford.edu/software/stanford-corenlp-full-2015-01-29.zip
 
-stanford-corenlp-3.5.0.jar,stanford-corenlp-3.5.0-javadoc.jar,stanford-corenlp-3.5.0-models.jar,stanford-corenlp-3.5.0-sources.jar
+stanford-corenlp-3.5.1.jar,stanford-corenlp-3.5.1-javadoc.jar,stanford-corenlp-3.5.1-models.jar,stanford-corenlp-3.5.1-sources.jar
 
 在stanford NLP library links下載完後，將上面4個.jar檔放入lib資料夾裡
 
