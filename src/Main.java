@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,17 +17,13 @@ import edu.ntnu.kdd.elearn.server.nlp.NLPUtil;
 import edu.ntnu.kdd.elearn.shared.model.Article;
 import edu.ntnu.kdd.elearn.shared.model.Question;
 import edu.ntnu.kdd.elearn.shared.model.Sentence;
-import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
-import edu.stanford.nlp.pipeline.Annotation;
-import edu.stanford.nlp.pipeline.StanfordCoreNLP;
-import edu.stanford.nlp.util.CoreMap;
 
 
 public class Main {
 
 
 	Gson gson ;
-	
+	private int questionNum = 0;
 	
 	public Main(String[] filepaths) throws Exception{
 		
@@ -37,7 +32,8 @@ public class Main {
 	    gson = builder.create();
 	    
 		
-	    for(int i = 0 ; i < filepaths.length ; i++){
+	    for(int i = 0 ; i < filepaths.length ; i++)
+	    {
 	    	
 			String content = readFile(filepaths[i]);
 			if(content == null)
@@ -45,11 +41,18 @@ public class Main {
 			
 			Article article = createArticle(content);	
 			Questions_with_sentence questions = nlpProcess(article);
-			
-//			writeFile(gson.toJson(questions),filepaths[i]);
-//			System.out.print(gson.toJson(questions));
+			questionNum += questions.output.size();
+//			StringBuilder builder1 = new StringBuilder();
+//			for(Main.Questions_with_sentence.Question q : questions.output)
+//			{
+//				builder1.append("S:"+q.sentence+"\n"+"Q:"+q.question+"\n");
+//			}
+//			System.err.print(builder1.toString());
+//		
+			writeFile(gson.toJson(questions),filepaths[i]);
+			System.out.print(gson.toJson(questions));
 	    }
-	    
+	    System.out.println(questionNum);
 	
 	}
 	
@@ -153,12 +156,18 @@ public class Main {
 			if(args == null)
 				throw new Exception("no argument");
 			String pathEntry = readFile(args[0]);
-			String []filepaths = new String[]{"1-01.txt"};//pathEntry.split(",");
+			String []filepaths = pathEntry.split(",");
 			
 				new Main(filepaths);
 	
-	
-			
+//			String s = "Do Mrs. Richardson love ruby like Mrs. ?";
+//			String inputStr = s;
+//		    String patternStr = "(Miss|Mr.|Mrs.|Ms.)\\s?$";
+//		    Pattern pattern = Pattern.compile(patternStr);
+//		    Matcher matcher = pattern.matcher(inputStr);
+//		    boolean matchFound = matcher.find();
+//		    
+//			System.out.print(matchFound+"|"+matcher.replaceAll(""));
 	}
 	
 	

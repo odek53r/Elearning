@@ -13,7 +13,7 @@ import edu.ntnu.kdd.elearn.shared.model.Word;
 public class TestWhoQG implements QuestionGeneratorInterface{
 	 private ArrayList<String> whoQuestions ;
 	 private NLPUtil nlpUtil = null;
-	 
+	 private whoQuestion who;
 
 	public TestWhoQG(NLPUtil nlpUtil) {
 		this.nlpUtil = nlpUtil;
@@ -27,7 +27,7 @@ public class TestWhoQG implements QuestionGeneratorInterface{
 		}
 		int count=nlpUtil.countVerb(temp);
 		// TODO Auto-generated method stub
-		whoQuestion who = new whoQuestion();	
+		who = new whoQuestion();	
 		whoQuestions = new ArrayList<String>();
 		if(count==0){
 			return false;
@@ -41,7 +41,10 @@ public class TestWhoQG implements QuestionGeneratorInterface{
 		}
 		return true;
 	}
-
+	public String getChangedSubject()
+	{
+		return who.getChangedSubject();
+	}
 	@Override
 	public List<Question> getQuestion(Sentence sentence, Article article)  {
 		// TODO Auto-generated method stub

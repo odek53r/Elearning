@@ -15,9 +15,9 @@ import edu.ntnu.kdd.elearn.shared.model.Word;
 public class whoQuestion {
 	private String whoQ = "";
 	Boolean RB = false;
-	private static String path = Stemmer.class.getResource("/").getPath();    
+	private static String path = "./resource/";//Stemmer.class.getResource("/").getPath();    
 	private static String extra_verb = path + "SpecialCase.txt" ;
-	
+	private String subject = "";
 	public ArrayList<String> WhoQG(Sentence sentence, Article article) {
 		String[] corenlpResult = article.getCoreferenceResult();// if empty then
 																// length =0 ,if
@@ -44,9 +44,11 @@ public class whoQuestion {
 					for (int i = WordchangedStart; i <= WordchangedEnd; i++) {
 						String WordChangedPostag = WordChangedlist.get(i)
 								.getPos();
+						String WordChangedNertag = WordChangedlist.get(i).getNer();
 						if (WordChangedPostag.equals("POS")
 								|| WordChangedPostag.equals("PRP")
-								|| WordChangedPostag.equals("PRP$")) {
+								|| WordChangedPostag.equals("PRP$")
+								) {
 							question.add(ProduceWhoQuestion(sentence, i));
 						}
 					}
@@ -68,6 +70,8 @@ public class whoQuestion {
 		if (endwordStr.getPos().equals("PRP$")) {
 			if (!endwordStr.getOriginal().equals("Its")) {
 				output = "Whose";
+				subject = endwordStr.getOriginal();
+				System.err.println(endwordStr.getOriginal());
 			} else {
 				output = "What";
 			}
@@ -79,13 +83,15 @@ public class whoQuestion {
 				String ori = endwordStr.getOriginal() ; //判斷原句的主詞是否為I/We
 				if(ori.equals("I")||ori.equals("i")||ori.equals("We")||ori.equals("we")||ori.equals("They")||ori.equals("they")){
 					fixverb = true ;
+					subject = ori; 
 				}
-				
 			} else {
 				output = "What";
 			}
 		} else if (endwordStr.getPos().equals("POS")) {
 			if (!endwordStr.getOriginal().equals("Its")) {
+				System.err.println(endwordStr.getOriginal());
+				subject = endwordStr.getOriginal();
 				output = "Whose";
 			} else {
 				output = "What";
@@ -157,6 +163,7 @@ public class whoQuestion {
 			}
 			else
 			{
+				temp[1] = temp[1].replaceAll("\\W(a|A|an|An)\\s",addSpace("the"));
 				whoQ = whoQ.replace(addSpace(temp[0].toLowerCase()),
 						addSpace(temp[1]));
 			}
@@ -172,6 +179,10 @@ public class whoQuestion {
 		}*/
 		System.out.println("WHO RPR replace :" + whoQ);
 		return whoQ;
+	}
+	public String getChangedSubject()
+	{
+		return subject;
 	}
 	private static String Chang(String aa) {
 		String Original =aa;
@@ -198,7 +209,8 @@ public class whoQuestion {
 			if( Original.endsWith("s")||Original.endsWith("x")||Original.endsWith("o")||Original.endsWith("ch")||Original.endsWith("sh")){
 				
 				 Original= Original+"es";
-			}else if(Original.endsWith("y")){
+			}else if(Original.endsWith("y")&&!Original.endsWith("ay")&&!Original.endsWith("ey")&&!Original.endsWith("iy")
+					&&!Original.endsWith("oy")&&!Original.endsWith("uy")){
 				Original=Original.substring(0,Original.length()-1);
 				Original=Original+"ies";
 				

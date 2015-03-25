@@ -214,7 +214,7 @@ public class StandQuestions {
 	    			
 	    			
 	    		}
-	    		else if(OriWord.equals("does")||OriWord.equals("do")||OriWord.equals("did")) //這邊當作一般V
+	    		else if( (OriWord.equals("does")||OriWord.equals("do")||OriWord.equals("did"))&&!use_v) //這邊當作一般V
 	    		{
 	    			if(!use_v){
 	    				question = OriWord + question  ; 
@@ -223,6 +223,7 @@ public class StandQuestions {
 	    			if(!NxtPos.equals("RB")){//
 		    			if((!NxtPos.equals("VB"))){
 		    				 if(!NxtPos.equals("RB")){
+		    					 System.err.println("TEST:"+temp.get(i).getOriginal());
 		    					question = question + " do" ; 
 		    				 }
 		    				 else {
@@ -272,7 +273,9 @@ public class StandQuestions {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-						question = question + " " + stem_verb;
+//	    				System.err.println(question+"|"+temp.get(i).getOriginal()+"|"+temp.get(i).getPos()+"|"+stem_verb);
+//	    				if(!WordPos.equals("VBD")&&!WordPos.equals("VBP")&&!WordPos.equals("VBZ") && (WordPos.equals("VB")||WordPos.equals("VBN")) )
+	    					question = question + " " + stem_verb;
 	    			}
 	    		}
 	    	}
@@ -341,7 +344,8 @@ public class StandQuestions {
 	    				}
 	    				else 
 	    				{
-	    						question = question + " " + OriWord.toLowerCase();
+	    						if(!WordPos.equals("RB"))
+	    							question = question + " " + OriWord.toLowerCase();
 	    				}
 	    			 				
 	    			}
@@ -377,7 +381,7 @@ public class StandQuestions {
 	    }
 	    System.out.println("YES/NO original Q :"+question) ; //印出問句
 	    question = PRPreplacement(sentence,question);   //文法代換規則
-	    question.replaceAll("( {1,}\\?)$", "?");//避免問號前有空格
+//	    question = question.replaceAll("(\\s+\\?)$", "?");//避免問號前有空格
 	    }	   	    	    	   
 	}
 	
@@ -389,13 +393,15 @@ public class StandQuestions {
 //			System.out.println("replacement :"+temp[0]+"--->"+temp[1]);
 			String replaceArg0 = addSpace(temp[0].toLowerCase());
 			String replaceArg1 = addSpace(temp[1]);
+			replaceArg1 = replaceArg1.replaceAll("\\W(a|A|an|An)\\s", addSpace("the"));
+//			replaceArg1 = replaceArg1.replaceAll("\\s?(a|an|A|An)\\s", " the ");
 			System.out.println("temp[0] addSpace:"+replaceArg0+", temp[1] addSpace:"+replaceArg1);
 			String temp1 = new String(oldQ);
-			oldQ = oldQ.replace(replaceArg0,replaceArg1);
+			oldQ = oldQ.replaceAll("\\s?"+replaceArg0+"\\W",replaceArg1);
 			if(temp1.equals(oldQ))
-				oldQ = oldQ.replace(replaceArg0.substring(0,replaceArg0.length()-1),replaceArg1);
+				oldQ = oldQ.replaceAll("\\s?"+replaceArg0.substring(0,replaceArg0.length()-1)+"\\W",replaceArg1);
 			if(temp1.equals(oldQ))
-				oldQ = oldQ.replace(replaceArg0.substring(1,replaceArg0.length()),replaceArg1);
+				oldQ = oldQ.replaceAll("\\s?"+replaceArg0.substring(1,replaceArg0.length())+"\\W",replaceArg1);
 		}
 		System.out.println("Yes/No Q with PRP replacement : "+oldQ);
 		return oldQ;

@@ -52,7 +52,7 @@ class Stemmer
                j, k;
     private static final int INC = 50;
                      /* unit of size whereby b is increased */
-    private static String path = Stemmer.class.getResource("/").getPath();
+    private static String path = "./resource/";//Stemmer.class.getResource("/").getPath();
     
     private static String addr_verb = path+"irregular_verb.txt";
     private static String addr_past = path+"past_tense.txt";

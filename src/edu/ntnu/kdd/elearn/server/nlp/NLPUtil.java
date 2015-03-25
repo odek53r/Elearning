@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import edu.ntnu.kdd.elearn.shared.model.Article;
 import edu.ntnu.kdd.elearn.shared.model.Question;
@@ -33,7 +35,8 @@ public class NLPUtil implements Serializable{
 	private StandQuestions standQuestion = new StandQuestions();
 
 	private QGBuilder qgBuiler = new QGBuilder();
-
+	
+	private boolean isPRP$_NN_POS = false;
 	private NLPUtil() {
 
 	}
@@ -256,15 +259,75 @@ public class NLPUtil implements Serializable{
 		
 		
 		changeProcessing(article, temp, sentenceRelation);
-		for (Sentence sentence : article.getSentenceList()) {
+		for (Sentence sentence : article.getSentenceList()) 
+		{
+			if(isPRP$_NN_POS(sentence))//有PRP$ NN POS句型不產生問句
+				continue;
+			if(isGreetStartWith(sentence))
+				continue;
+			Paramater para = new Paramater();
+			checkPRP(para,sentence);
+			boolean isFound = para.isFirstPRPFound;//若第一個字為代名詞(非第一人稱)且找不到取代, 則不產生問句.
+//			if(!isFound)
+//				continue;
 			List<QuestionGeneratorInterface> qgList = QGBuilder.listQG(this);
 			for (QuestionGeneratorInterface qg : qgList) {
-				if (qg.isAcceptable(sentence, article)) {
-					for (Question question : qg.getQuestion(sentence, article)) {
+				if (qg.isAcceptable(sentence, article)) 
+				{
+					for (Question question : qg.getQuestion(sentence, article)) 
+					{
+						if(!isFound&&!startWithWord(question.getContent()).equals("Who")&&!startWithWord(question.getContent()).equals("What"))//若第一個字為代名詞(非第一人稱)且找不到取代, 則不產生問句.
+						{
+							continue;
+						}
+						if(!para.isPRP_POS_ACCFound && !startWithWord(question.getContent()).equals("Whose"))//若代名詞所有格 或 代名詞受格 找不到取代(非第一人稱), 則不產生問句.
+							continue;
+						
 						if (question != null) {
-							String q = changeWriter(sentence.getContent(), question.getContent());
-							question.setContent(changeTheWriter(q));	
-							question.set_sinorpul(thewriter_sinpul(q)); //��the writer���銴
+							System.out.println("before changeWriter: "+question.getContent());
+							String q = changeWriter(sentence.getContent(), question.getContent());//before changeTheWriter
+							isPRP$_NN_POS = false;
+							
+							if(startWithWord(q).equals("Who")||startWithWord(q).equals("Whose"))
+							{
+								String subject = ((TestWhoQG)qg).getChangedSubject();
+								if(subject.toLowerCase().equals("i")||subject.toLowerCase().equals("we")||subject.toLowerCase().equals("my")||subject.toLowerCase().equals("our"))
+								{
+									q = q.replaceAll("\\W(i|I)\\W"," he/she ");
+									q = q.replaceAll("\\W(my)\\W"," his/her ");
+									q = q.replaceAll("\\W(me)\\W"," him/her ");
+									q = q.replaceAll("\\W(we)\\W"," they ");
+									q = q.replaceAll("\\W(our)\\W"," their ");
+									q = q.replaceAll("\\W(us)\\W"," them ");
+								}
+							}
+							System.out.println("before changeTheWriter: "+q);
+							q = changeTheWriter(q);
+							System.out.println("after changeTheWriter: "+q);
+							q=  changeDT_PosNames(q);
+							System.out.println("after changeDT_PosNames: "+q);
+							q = q.replaceAll(" ,",",");
+							q = q.replaceAll(" 's","'s");
+							q = q.replaceAll("\\b(here|Here)\\s","there ");
+//							q = q.replaceAll("\\s+$","?");//避免沒有問號
+//							q = q.replaceAll("(\\s+\\?+)\\s*$", "?");//避免問號前有空格
+							q = q.replaceAll("\\s*\\?*\\s*$", "");//去掉句子後的問號和空格
+							q = q+"?";//重新補上問號
+							if(isPRP$_NN_POS)
+								continue;
+//							if(q.toLowerCase().matches(".*(\\W+(i|my|me|you|your|he|his|him|she|her|they|their|them|we|our|us|it|its)+(\\W+|\\?))+.*"))//有代名詞不產生問句
+//							{
+//								continue;
+//							}
+							question.setContent(q);	
+							question.set_sinorpul(thewriter_sinpul(q)); //��the writer���銴
+//							if(!isFound)
+//							{
+//								question.setContent("NotFound: "+question.getContent());
+//							}
+//							if(!para.isPRP_POS_ACCFound)
+//								question.setContent("PRPNotFound: "+question.getContent());
+							
 							sentence.addQuestion(question);
 						}
 					}
@@ -306,7 +369,169 @@ public class NLPUtil implements Serializable{
 		*/
 		
 	}
-
+	
+	class Paramater
+	{
+		public boolean isFirstPRPFound;//若第一個字為代名詞(非第一人稱)且找不到取代
+		public boolean isPRP_POS_ACCFound;//若代名詞所有格 或 代名詞受格 找不到取代
+	}
+	private void checkPRP(Paramater para,Sentence sentence)//檢查代名詞可否找出取代
+	{
+		boolean isFound = true;
+		para.isPRP_POS_ACCFound = true;
+		List<String> ch = sentence.getChangeList();
+		ArrayList<String> pos_acc_list = new ArrayList<String>();
+		Word w = sentence.getWordList().get(0);
+		for(Word word:sentence.getWordList())//紀錄所有格代名詞跟代名詞受格的詞
+		{
+			if(word.getPos().equals("PRP")||word.getPos().equals("PRP$"))
+			{
+				String ori = word.getOriginal().toLowerCase();
+				if(ori.equals("your")||ori.equals("you")||ori.equals("his")||ori.equals("him")
+				 ||ori.equals("her")||ori.equals("their")||ori.equals("them")||ori.equals("its")
+				 ||ori.equals("it"))
+				{
+					pos_acc_list.add(ori);
+				}
+			}
+		}
+		
+		for(String PRP: pos_acc_list)//檢查代名詞所有格或代名詞受格可否找出取代
+		{
+			for(String s:ch)
+			{
+				String split[] = s.split("=>");
+				String prior = split[0].replaceAll(" ","").toLowerCase();
+				String posterior = split[1].replaceAll(" ","").toLowerCase();
+				
+				if(PRP.equals(prior) && (posterior.equals("i")|| posterior.equals("my")|| posterior.equals("me")
+					|| posterior.equals("you")|| posterior.equals("your")|| posterior.equals("you")|| posterior.equals("he")
+					|| posterior.equals("his")|| posterior.equals("him")|| posterior.equals("she")|| posterior.equals("her")
+					|| posterior.equals("they")|| posterior.equals("their")|| posterior.equals("them")|| posterior.equals("it")
+					|| posterior.equals("its")|| posterior.equals("we")|| posterior.equals("our")|| posterior.equals("us")
+					) 
+				  )
+				{
+					if(para.isPRP_POS_ACCFound == true)
+					{
+						para.isPRP_POS_ACCFound = false;
+						System.err.println("TEST3:"+sentence.getContent()+"|"+PRP+"|"+prior+"|"+posterior);
+					}
+				}
+			}
+			if(para.isPRP_POS_ACCFound == false)//縮短計算時間用
+				break;
+		}
+		if(ch.isEmpty())//取代陣列為空，原句第一個代名詞找不到取代
+		{
+			if(w.getPos().equals("PRP")&&!w.getOriginal().equals("I")&&!w.getOriginal().equals("We")&&!w.getOriginal().equals("Our")&&!w.getOriginal().equals("My"))
+			{
+				isFound = false;
+				
+			}
+			if(!pos_acc_list.isEmpty())
+				para.isPRP_POS_ACCFound = false;
+		}
+		for(String s:ch)//檢查原句第一個word代名詞主格是否能找出取代
+		{
+			String split[] = s.split("=>");
+			if(w.getPos().equals("PRP")&&!w.getOriginal().equals("I")&&!w.getOriginal().equals("We")&&!w.getOriginal().equals("Our")&&!w.getOriginal().equals("My"))
+			{
+				if(!split[0].equals(w.getOriginal()+" "))//陣列不為空，可是第一個代名詞不在取代陣列裡
+				{
+					isFound = false;
+				}
+				else
+				{
+					if(//split[0].equals(w.getOriginal()+" ")&&
+							(split[1].toLowerCase().equals("i ")||split[1].toLowerCase().equals("my ")||split[1].toLowerCase().equals("me ")
+							||split[1].toLowerCase().equals("you ")||split[1].toLowerCase().equals("your ")||split[1].toLowerCase().equals("he ")
+							||split[1].toLowerCase().equals("his ")||split[1].toLowerCase().equals("him ")||split[1].toLowerCase().equals("she ")
+							||split[1].toLowerCase().equals("her ")||split[1].toLowerCase().equals("they ")||split[1].toLowerCase().equals("their ")
+							||split[1].toLowerCase().equals("them ")||split[1].toLowerCase().equals("we ")||split[1].toLowerCase().equals("our ")
+							||split[1].toLowerCase().equals("us ")||split[1].toLowerCase().equals("it ")||split[1].toLowerCase().equals("its ")) )
+					{
+						isFound = false;
+					}
+					else
+					{
+						isFound = true;
+						break;
+					}
+				}
+				
+			}
+		}
+		
+		para.isFirstPRPFound = isFound;
+		
+	}
+//	private boolean checkFirstPRP(Sentence sentence)//若第一個字為代名詞(非第一人稱)且找不到取代, 則不產生問句.
+//	{
+//		boolean isFound = true;
+//		List<String> ch = sentence.getChangeList();
+//		Word w = sentence.getWordList().get(0);
+//		if(w.getPos().equals("PRP")&&!w.getOriginal().equals("I")&&!w.getOriginal().equals("We")&&!w.getOriginal().equals("Our")&&!w.getOriginal().equals("My"))
+//		{
+//			if(ch.isEmpty())//取代陣列為空，原句第一個代名詞找不到取代
+//				isFound = false;
+//			for(String s:ch)
+//			{
+//				String split[] = s.split("=>");
+//				if(!split[0].equals(w.getOriginal()+" "))//陣列不為空，可是第一個代名詞不在取代陣列裡
+//					isFound = false;
+//				else 
+//					isFound = true;
+//				if(split[0].equals(w.getOriginal()+" ")&&
+//						(split[1].toLowerCase().equals("i ")||split[1].toLowerCase().equals("my ")||split[1].toLowerCase().equals("me ")
+//						||split[1].toLowerCase().equals("you ")||split[1].toLowerCase().equals("your ")||split[1].toLowerCase().equals("he ")
+//						||split[1].toLowerCase().equals("his ")||split[1].toLowerCase().equals("him ")||split[1].toLowerCase().equals("she ")||split[1].toLowerCase().equals("her ")||split[1].toLowerCase().equals("they ")
+//						||split[1].toLowerCase().equals("their ")||split[1].toLowerCase().equals("them ")||split[1].toLowerCase().equals("we ")
+//						||split[1].toLowerCase().equals("our ")||split[1].toLowerCase().equals("us ")||split[1].toLowerCase().equals("it ")
+//						||split[1].toLowerCase().equals("its ")) )
+//				{
+//					isFound = false;
+//					System.err.println("TEST!!!!!!!1");
+//				}
+//				
+//			}
+//		}
+//		return isFound;
+//	}
+	public String startWithWord(String s)
+	{
+		return s.substring(0, s.indexOf(" "));
+	}
+	public boolean isGreetStartWith(Sentence sentence)
+	{
+		String inputStr = sentence.getContent();
+	    String patternStr = "^(Dear|Hey|Hi|Howdy|Yo|Hello)\\s?\\w*,\\s";
+	    Pattern pattern = Pattern.compile(patternStr);
+	    Matcher matcher = pattern.matcher(inputStr);
+	    boolean matchFound = matcher.find();
+	    
+		return matchFound;
+	}
+	public boolean isPRP$_NN_POS(Sentence sentence)
+	{
+//		System.err.println("PRP$:"+sentence.getContent());
+		boolean PRP$_NN_POS = false;
+		for(int i = 0; i < sentence.getWordList().size()-2 ; i++)
+		{
+			Word word = sentence.getWordList().get(i);
+			if(word.getPos().equals("PRP$")&&sentence.getWordList().get(i+1)!=null&&sentence.getWordList().get(i+2)!=null)
+			{
+				if(sentence.getWordList().get(i+1).getPos().equals("NN")&&sentence.getWordList().get(i+2).getPos().equals("POS"))
+				{
+					PRP$_NN_POS = true;
+					
+				}
+			}
+//			System.err.print(word.getPos());
+		}
+		
+		return PRP$_NN_POS;
+	}
 	public int countVerb(List<Word> wordList) { //閮�������
 
 		int verbCount = 0;
@@ -580,14 +805,10 @@ public class NLPUtil implements Serializable{
 					}
 					changed = source.getWordList().get(i);
 					
-					if(changed.getReln()!=null)//檢查是否為所有格
-					{
-						for(GrammaticalRelation relation : changed.getReln())
-						{
-							if(relation.getShortName().equals("poss"))
-								isPoss = true;
-						}
-					}
+					if(changed.getPos().equals("PRP$")||changed.getPos().equals("POS"))//判斷是否所有格
+						isPoss = true;
+					else
+						isPoss = false;
 					
 					changeString = changeString
 							+ changed.getOriginal() + " ";
@@ -615,7 +836,8 @@ public class NLPUtil implements Serializable{
 						}
 						
 						boolean isRecWordFound = false;
-						if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$")){//代換後如果還是PRP or PRP$則繼續代換，只遞迴一次
+						if(changed.getPos().equals("PRP")||changed.getPos().equals("PRP$"))//代換後如果還是PRP or PRP$則繼續代換，只遞迴一次
+						{
 							int curWordStart = i;
 							int curWordEnd = i+1;
 							
@@ -666,8 +888,6 @@ public class NLPUtil implements Serializable{
 											changeString = changeString
 													+ targetWord + " ";
 										
-										
-										
 										counter++;//代換字變長
 									}
 									counter--;//扣掉原始字重複加
@@ -676,15 +896,11 @@ public class NLPUtil implements Serializable{
 									break;
 								}
 							}
-							canAdd = true;
+//							canAdd = true;
 						} 
-						if (counter>3) { //大於3個字則不取代
-							canAdd=false;
-						}
 						if (sentenceIndex==targetSentence) { //產生規則的那句不取代
 							canAdd=false;
 						}
-						
 						
 						if(changed.getPos().equals("POS")){//避免PRP => 's錯誤
 							if(isPRP && (!isPRPs)){
@@ -741,11 +957,16 @@ public class NLPUtil implements Serializable{
 						
 						counter++;
 						
+					}//end for
+					if (counter>3) { //大於3個字則不取代
+						canAdd=false;
 					}
-				}
+					System.err.println(changeString+"|"+counter+"|"+canAdd);
+				}//end canAdd
 													
 				if(canAdd){
-						if(isPoss){// 避免PRPs => non-PRPs
+						if(isPoss)
+						{// 避免PRPs => non-PRPs//避免[his =>Josh ] or [his =>him ] or [his =>he ] or [his =>Mary's brother ] or [his =>Their brother ] or[his =>his ]
 							String revers = "";
 							String temp1[] = changeString.split("=>");
 							for(int i = changeString.length()-1; i>=0; i--)
@@ -753,14 +974,57 @@ public class NLPUtil implements Serializable{
 								revers = revers + changeString.charAt(i);
 							}							
 							revers = revers.substring(1,3);
-							//除了person's和PRP$之外的名詞所有格如果沒加's，在這邊加
-							if(!((revers.equals("s'")||revers.equals("s’"))) && !temp1[0].contains("our") && !temp1[0].contains("your") && !temp1[0].contains("their")
-									&& !temp1[0].contains("Our") && !temp1[0].contains("Your") && !temp1[0].contains("Their")&& !temp1[0].contains("my") && !temp1[0].contains("My")
-									&& !temp1[0].contains("Her") && !temp1[0].contains("her")&&!temp1[0].contains("His") && !temp1[0].contains("his")
-									&& !temp1[0].contains("My") && !temp1[0].contains("my")&& !temp1[0].contains("Its") && !temp1[0].contains("its")){
+							//除了person's和PRP$之外的名詞所有格如果沒加's，在這邊加//[his =>him ] or [his =>he ]
+							if(temp1[1].toLowerCase().equals("i ")||temp1[1].toLowerCase().equals("me ")
+									||temp1[1].toLowerCase().equals("you ")||temp1[1].toLowerCase().equals("he ")
+									||temp1[1].toLowerCase().equals("him ")||temp1[1].toLowerCase().equals("she ")
+									||temp1[1].toLowerCase().equals("her ")||temp1[1].toLowerCase().equals("they ")
+									||temp1[1].toLowerCase().equals("them ")||temp1[1].toLowerCase().equals("we ")
+									||temp1[1].toLowerCase().equals("us ")||temp1[1].toLowerCase().equals("it "))
+							{
+								changeString = changeString.replace("=>"+temp1[1],"=>");
+								changeString = changeString+temp1[0].toLowerCase();
+							}else if//[his =>Josh ] or[his =>Mary's brother ] or [his =>Their brother ] or[his =>his ]
+							(!((revers.equals("s'")||revers.equals("s’"))) && !temp1[1].equals("our ") && !temp1[1].equals("your ") && !temp1[1].equals("their ")
+									&& !temp1[1].equals("Our ") && !temp1[1].equals("Your ") && !temp1[1].equals("Their ")&& !temp1[1].equals("my ") && !temp1[1].equals("My ")
+									&& !temp1[1].equals("Her ") && !temp1[1].equals("her ")&&!temp1[1].equals("His ") && !temp1[1].equals("his ")
+									&& !temp1[1].equals("My ") && !temp1[1].equals("my ")&& !temp1[1].equals("Its ") && !temp1[1].equals("its "))
+							{
 								changeString = changeString + "'s";
 							}
-						}					
+						}else//避免[he =>Josh's ] or [(he|him) =>(he|his|him) ] or [he =>Mary's brother's ] or [he =>Their brother's ] or[he =>Josh ]， 箭頭前面不會出現人名，只有指代才會進來
+						{
+							String revers = "";//避免人名+'s
+							String t[] = changeString.split("=>");
+							for(int i = changeString.length()-1; i>=0; i--)
+							{
+								revers = revers + changeString.charAt(i);
+							}							
+							revers = revers.substring(1,3);
+							if(revers.equals("s'")||revers.equals("s’"))//[he =>Josh's ] or[he =>Mary's brother's ] or [he =>Their brother's ]
+							{
+								changeString = changeString.replace("=>"+t[1],"=>");
+								t[1] = t[1].substring(0, t[1].length()-3);
+								changeString = changeString+t[1];
+							}//[he =>his ] or [him =>his ]
+							else if(t[1].toLowerCase().equals("my ")||t[1].toLowerCase().equals("your ")||t[1].toLowerCase().equals("her ")
+									||t[1].toLowerCase().equals("his ")||t[1].toLowerCase().equals("our ")||t[1].toLowerCase().equals("their ")
+									||t[1].toLowerCase().equals("its ")||t[1].toLowerCase().equals("i ")||t[1].toLowerCase().equals("you ")||t[1].toLowerCase().equals("she ")
+									||t[1].toLowerCase().equals("he ")||t[1].toLowerCase().equals("we ")||t[1].toLowerCase().equals("they ")
+									||t[1].toLowerCase().equals("it ")||t[1].toLowerCase().equals("me ")||t[1].toLowerCase().equals("him ")
+									||t[1].toLowerCase().equals("us ")||t[1].toLowerCase().equals("them "))
+									
+							{
+								changeString = changeString.replace("=>"+t[1],"=>");
+								changeString = changeString+t[0].toLowerCase();
+							}
+							
+						}
+					
+					if(changeString.split("=>")[0].matches("I\\s"))
+					{
+						changeString = "I =>I ";
+					}
 					System.err.println(changeString);
 					source.addChange(changeString);
 				}
@@ -835,16 +1099,89 @@ public class NLPUtil implements Serializable{
 		}
 		return result;
 	}
+	
+	
+	public String changeDT_PosNames(String s)//冠詞替換 EX: a/an/this/that/these/those -> the //對已產生的問句檢查, 若所有格的名詞在前面出現過, 則換成his/her
+	{
+		StringBuilder builder = new StringBuilder();
+		StanfordCoreNLP pipeline = new StanfordCoreNLP();
+		Annotation annotation = new Annotation(s);
+		pipeline.annotate(annotation);
+		List<CoreMap> sentences = annotation.get(SentencesAnnotation.class);
+		SemanticGraph graph = sentences.get(0).get(SemanticGraphCoreAnnotations.BasicDependenciesAnnotation.class);
+        List<SemanticGraphEdge> edgeList = graph.edgeListSorted();
+        boolean flag;
+        int tokenSize = sentences.get(0).get(TokensAnnotation.class).size();
+        HashMap<String, String> nameMap = new HashMap<String, String>();
+        String tokenFirstOri = "";
+        Sentence sentence = new Sentence();
+        for (int i = 0; i < tokenSize; i++) 
+        {
+        	flag = true;
+        	CoreLabel token = sentences.get(0).get(TokensAnnotation.class).get(i);
+        	Word word = new Word();
+        	word.setPos(token.get(PartOfSpeechAnnotation.class));
+        	sentence.getWordList().add(word);
+        	sentence.setContent(sentence.getContent()+token.originalText()+" ");
+//        	if(token.originalText().toLowerCase().equals("a")||token.originalText().toLowerCase().equals("this")||token.originalText().toLowerCase().equals("that")
+//        			||token.originalText().toLowerCase().equals("these")||token.originalText().toLowerCase().equals("those")||token.originalText().toLowerCase().equals("an"))
+//        	{
+//		        for (int j = 0 ; j < edgeList.size() ; j++ ) 
+//		        {
+//		        	SemanticGraphEdge edge = edgeList.get(j);
+//			        IndexedWord iw1 = edge.getGovernor();
+//			        IndexedWord iw2 = edge.getDependent();
+//			        GrammaticalRelation  relation = edge.getRelation();
+//			        if(iw2.beginPosition() == token.beginPosition() && relation.getShortName().equals("det"))
+//			        {
+//			        	builder.append("the ");
+//			        	flag = false;
+//			        }
+//				}
+//        	}	
+        	
+        	String tokenNer = token.ner();
+        	if((i+1)<tokenSize && sentences.get(0).get(TokensAnnotation.class).get(i+1).get(PartOfSpeechAnnotation.class).equals("POS"))
+        	{
+        		if(nameMap.get(token.originalText())!=null)
+        		{
+        			String temp  = builder.toString();
+        			temp = replaceAll(temp,"(Miss|Mr.|Mrs.|Ms.)\\s$","");
+//        			if(i > 0)
+//        			{
+//        				String prevTokenOri = sentences.get(0).get(TokensAnnotation.class).get(i-1).originalText();
+//        				String prevTokenNer = sentences.get(0).get(TokensAnnotation.class).get(i-1).ner();
+//        				if(prevTokenNer.equals("PERSON")&&nameMap.get(prevTokenOri)!=null)
+//        				{
+//        					temp = replaceAll(temp,prevTokenOri+"\\s$","");
+//        				}
+//        			}
+        			builder = new StringBuilder(temp);
+        			
+        			token.setOriginalText("his/her");
+        			i++;
+        		}
+        	}
+        	
+        	if(flag)
+        		builder.append(token.originalText()+" ");
+        	if(tokenNer.equals("PERSON"))
+        		nameMap.put(token.originalText(), token.originalText());
+        }
+        isPRP$_NN_POS = isPRP$_NN_POS(sentence);//check isPRP$_NN_POS
+		return builder.toString();
+	}
+	
 	public String changeWriter(String origin,String sentence)
 	{
 		String result = new String(sentence);
 		if(origin.matches(".*(\\s?(I|i)\\s(\\s|\\w)+)\\smyself\\s.*"))//I....myself -> I....himself
 		{
-			result = result.replaceAll("myself","himself");
+			result = result.replaceAll("myself","himself/herself");
 		}
-		if(origin.matches(".*(\\s?(I|i)\\s(\\s|\\w)+)\\smy\\s.*"))//I....myself -> I....himself
+		if(origin.matches(".*(\\s?(I|i)\\s(\\s|\\w)+)\\smy\\s.*"))//I....my -> I....his
 		{
-			result = result.replaceAll("my","his");
+			result = result.replaceAll("my","his/her");
 		}
 		return result;
 	}
@@ -853,19 +1190,19 @@ public class NLPUtil implements Serializable{
 		result = result.replaceAll("Now ","");
 		System.out.println("test-------------"+result);
 		
-		if (result.matches(".*(\\W+(I|we|I'm|My|our|my|Our|We|Us|us|i)+\\W+)+.*")) {// include
+		if (result.matches(".*(\\W+(I|we|I'm|My|our|my|Our|We|Us|us|i|Me|me)+\\W*)+.*")) {// include
 			System.out.println("I am");
 			// I,we,My...etc
 			result = result.replaceAll("(\\s?(I|i)\\s(am)\\s)|\\s?(I�)\\s",
-					" the writer is ");
+					" the author is ");
 			result = result.replaceAll("(\\s?(am|Am)\\s(i|I)\\s)|\\s?(I�)\\s",
-					" is the writer ");
+					" is the author ");
 			result = result.replaceAll(
-					"(\\s(I|we|us|i|me)(\\W)\\s)|(\\s(I|we|us|i|me)\\W)|((I|We|Us)\\s)",
-					" the writer ");
+					"(\\s(I|we|us|i|me)(\\W)\\s)|(\\s(I|we|us|i|me)\\W)|((I|Me|We|Us)\\s)",
+					" the author ");
 			result = result.replaceAll(
 					"(\\s(my|our)\\s)|(\\s(my|our)\\W)|((My|Our)\\s)",
-					" the writer's ");
+					" the author's ");
 
 		}
 		result = result.replaceAll(" mr. "," Mr. ");
@@ -873,7 +1210,34 @@ public class NLPUtil implements Serializable{
 		result = result.replaceAll(", too","");
 		//result = result.replaceAll(", but",""); //�芣��
 		//result = result.replaceAll(", then","");
-		return result;
+		StringBuilder builder = new StringBuilder();
+		String temp[] = result.split(" ");
+		
+		
+		boolean isFirstFind = false;
+		for(int i = 0 ; i <temp.length ; i++)//問句中已出現the writer, 後面的the writer’s換成”her/his”
+		{
+			
+			if( temp[i].matches("the")&&(i+1<temp.length)&&temp[i+1].matches("author\\s*('s)?"))
+			{
+				if(isFirstFind == false)
+				{
+					isFirstFind = true;
+					builder.append(temp[i]+" "+temp[i+1]+" ");
+					
+				}else
+				{
+					if(temp[i].matches("the")&&(i+1<temp.length)&&temp[i+1].matches("author\\s*('s)"))
+					{
+						builder.append(" his ");
+						
+					}
+				}
+				i++;
+			}else
+				builder.append(temp[i]+" ");
+		}
+		return builder.toString();
 	}
 	
 	public boolean thewriter_sinpul(String sentence){
@@ -884,5 +1248,11 @@ public class NLPUtil implements Serializable{
 		}
 		return flag ;
 	}
-	
+	private String replaceAll(String s,String patternStr,String to)
+	{
+	    Pattern pattern = Pattern.compile(patternStr);
+	    Matcher matcher = pattern.matcher(s);
+	    boolean matchFound = matcher.find();
+	    return matcher.replaceAll(to);
+	}
 }

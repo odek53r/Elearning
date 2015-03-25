@@ -1,7 +1,9 @@
 package edu.ntnu.kdd.elearn.server.nlp;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.ntnu.kdd.elearn.shared.model.Article;
 import edu.ntnu.kdd.elearn.shared.model.Question;
@@ -15,11 +17,27 @@ import edu.stanford.nlp.trees.GrammaticalRelation;
 public class TimeQG implements QuestionGeneratorInterface {
 
 	private NLPUtil nlpUtil;
-
+	private enum FrequencyPhrase {
+		normally,twice,thrice,once
+	};
+	private enum Frequency{
+		always,never,occasionally,often,rarely, seldom, sometimes, usually
+	};
+	private Map<String,String> freqPhraseMap = new HashMap<String,String>();
+	private Map<String,String> freqMap = new HashMap<String,String>();
+	private boolean hasFreqency = false;
 	public TimeQG(NLPUtil nlpUtil) {
 		this.nlpUtil = nlpUtil;
+		for(FrequencyPhrase f:FrequencyPhrase.values())
+		{
+			freqPhraseMap.put(f.name(), f.name());
+		}
+		for(Frequency f: Frequency.values())
+		{
+			freqMap.put(f.name(), f.name());
+		}
 	}
-
+	
 	@Override
 	public boolean isAcceptable(Sentence sentence, Article article) {
 		ArrayList<Word> temp = sentence.getWordList();
@@ -41,10 +59,25 @@ public class TimeQG implements QuestionGeneratorInterface {
 				result = true;
 			}
 		}
+		
 		return result;
 
 	}
-
+	public boolean checkFrequency(Sentence sentence)
+	{
+		for(int i = 0 ; i < sentence.getWordList().size()-1 ; i++)
+		{
+			Word word = sentence.getWordList().get(i);
+			Word nextWord = sentence.getWordList().get(i+1);
+			if(freqMap.containsKey(word.getOriginal()))
+			{
+//				if(nextWord.getNer()!=null && (nextWord.getNer().equals("DURATION")||nextWord.getNer().equals("TIME")||nextWord.getNer().equals("DATE")) )
+					return true;
+			}
+				
+		}
+		return false;
+	}
 	public boolean checkWeekDay(Sentence sentence) {
 		boolean result = false;
 		for (int i = 0; i < sentence.getWordList().size(); i++) {
@@ -241,16 +274,34 @@ public class TimeQG implements QuestionGeneratorInterface {
 		}
 		List<Question> result = new YNQuestionGenerator(this.nlpUtil)
 				.getQuestion(tempSentence, article);
+		
+		if(hasFreqency == false)
+			hasFreqency = checkFrequency(sentence);
+		
 		for (Question question : result) {
 			String tempContent = question.getContent() ;
 			
 			int q = tempContent.indexOf(",") ; //test
 			System.out.println(q+"tmpContent with question:!!"+tempContent) ;//testcode
+			String prefix = "";
 			
-			tempContent = "When " + tempContent.substring(0, 1).toLowerCase() //頧�神 憒�������
-					+ tempContent.substring(1, tempContent.length());
+			tempContent = tempContent.substring(0, 1).toLowerCase() //頧�神 憒�������
+						+ tempContent.substring(1, tempContent.length()).toLowerCase();
+			
+			if(!hasFreqency)
+				prefix = "When ";
+			else
+			{
+				prefix = "How often ";
+				tempContent = tempContent.replaceAll("\\s?(always|never|occasionally|often|rarely|seldom|sometimes|usually)\\s"," ");
+			}
+			tempContent = prefix+tempContent;
+			
 			question.setContent(tempContent);
-			question.setType(Type.WHEN);
+			if(!hasFreqency)
+				question.setType(Type.WHEN);
+			else
+				question.setType(Type.FREQUENCY);
 		}
 
 		return result;
@@ -295,8 +346,9 @@ public class TimeQG implements QuestionGeneratorInterface {
 		if(removedWords.isEmpty())return;
 		for(Word removedWord : removedWords)
 		{
+			if(hasFreqency == false)
+				hasFreqency = freqPhraseMap.containsKey(removedWord.getOriginal());
 			words.remove(removedWord);
-			
 			ArrayList<IndexedWord> reWd = removedWord.getReWd();
 			ArrayList<GrammaticalRelation> reln = removedWord.getReln();
 			if(reWd != null)
