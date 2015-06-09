@@ -1,5 +1,8 @@
 Elearning
 =========
+
+一個可以自動根據英文文章上下文產生問題的系統
+
 *** stanford NLP library已更新
 
 stanford NLP library links = http://nlp.stanford.edu/software/stanford-corenlp-full-2015-01-29.zip
